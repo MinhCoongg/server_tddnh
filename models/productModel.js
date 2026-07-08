@@ -338,11 +338,12 @@ export default class productModel {
             if (policies && policies.length > 0) {
                 for (const p of policies) {
                     await connection.execute(
-                        `INSERT INTO policy (productId, policyType, fineValue, unit, light_damage, medium_damage, heavy_damage) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        `INSERT INTO policy (productId, policyType, content, fineValue, unit, light_damage, medium_damage, heavy_damage) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                         [
                             productId, 
                             p.type,      
+                            p.content || 'Không có nội dung', 
                             p.fineValue, 
                             p.unit,
                             p.lightDamage || null, 

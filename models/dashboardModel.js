@@ -114,7 +114,7 @@ export default class AdminModel{
             ORDER BY r.createdAt DESC 
             LIMIT ? OFFSET ?
         `;
-        params.push(Number(limit), Number(offset));
+        params.push(parseInt(limit, 10), parseInt(offset, 10));
         
         const [rows] = await execute(query, params);
         return rows;
