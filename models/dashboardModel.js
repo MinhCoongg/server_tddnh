@@ -60,6 +60,7 @@ export default class AdminModel{
         let query = `
             SELECT DISTINCT
                 r.id, 
+                r.createdAt,
                 CONCAT('#RS', r.id) as orderCode,
                 r.startDate, r.endDate, 
                 r.status,
