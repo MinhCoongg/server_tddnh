@@ -298,7 +298,7 @@ export class RentalModel {
                     ?,
                     'Deposit',
                     ?,
-                    'Completed'
+                    'Success'
                 )
                 `,
                 [
