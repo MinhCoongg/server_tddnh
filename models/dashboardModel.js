@@ -55,21 +55,15 @@ export default class AdminModel{
 
 
     static async getAllSystemOrders(status, search, page = 1, limit = 5) {
-        const l = parseInt(limit, 10);
+        const l = parseInt(limit, 10) || 5;
         const o = (parseInt(page, 10) - 1) * l;
         let query = `
-            SELECT DISTINCT
-                r.id, 
-                r.createdAt,
-                CONCAT('#RS', r.id) as orderCode,
-                r.startDate, r.endDate, 
-                r.status,
-                u_renter.name as renterName, u_renter.phoneNumber as renterPhone,
-                u_owner.name as ownerName, u_owner.phoneNumber as ownerPhone,
-                (IFNULL(r.rentalFee, 0) + IFNULL(r.shippingFee, 0) + IFNULL(i.penaltyFee, 0)) as netIncome,
-                r.depositFee,
-                p.title as productName,
-                pi.imageUrl as productImage
+            SELECT DISTINCT r.id, r.createdAt, CONCAT('#RS', r.id) as orderCode,
+            r.startDate, r.endDate, r.status,
+            u_renter.name as renterName, u_renter.phoneNumber as renterPhone,
+            u_owner.name as ownerName, u_owner.phoneNumber as ownerPhone,
+            (IFNULL(r.rentalFee, 0) + IFNULL(r.shippingFee, 0) + IFNULL(i.penaltyFee, 0)) as netIncome,
+            r.depositFee, p.title as productName, pi.imageUrl as productImage
             FROM rentalrequest r
             JOIN user u_renter ON r.renterId = u_renter.id
             LEFT JOIN invoice i ON r.id = i.rentalId
@@ -81,8 +75,9 @@ export default class AdminModel{
         `;
         
         const params = [];
-        if (status && status !== 'All') {
-            query += ` AND r.status = ?`; 
+
+        if (status && status.trim() !== '' && status !== 'All') {
+            query += ` AND r.status = ?`;
             params.push(status);
         }
 
@@ -91,9 +86,10 @@ export default class AdminModel{
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
         
-        query += ` ORDER BY r.createdAt DESC LIMIT ? OFFSET ? `;
-        params.push(l, o);
+        query += ` ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
+        params.push(Number(l), Number(o));
         
+        console.log("SQL:", query, "Params:", params);
         const [rows] = await execute(query, params);
         return rows;
     }

@@ -29,6 +29,7 @@ export default class AdminController{
 
     static async getAllOrders(req, res) {
         try {
+            console.log("Dữ liệu gửi lên là: ",  req.query)
             const { status, search} = req.query;
             const page = parseInt(req.query.page, 10) || 1;
             const limit = parseInt(req.query.limit, 10) || 5;
