@@ -4,7 +4,7 @@ const pool = createPool({
     user: process.env.MYSQLUSER || process.env.DB_USER,
     password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD,
     database: process.env.MYSQLDATABASE || process.env.DB_NAME,
-    port: process.env.MYSQLPORT || process.env.DB_PORT,
+    port: process.env.MYSQLHOST === 'mysql.railway.internal' ? 3306 : (process.env.MYSQLPORT || 45431),
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
