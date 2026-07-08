@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { execute } from '../config/db.js';
 
-cron.schedule("*/10 * * * * *", async () => {
+cron.schedule("0 * * * * *", async () => {
     try {
         const [result] = await execute(`
             UPDATE rentalrequest
