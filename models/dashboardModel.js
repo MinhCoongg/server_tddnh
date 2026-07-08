@@ -29,7 +29,7 @@ export default class AdminModel{
             WHERE createdAt >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
             AND status IN ('Paid', 'Completed')
             GROUP BY DATE_FORMAT(createdAt, '%m/%Y')
-            ORDER BY createdAt ASC
+            ORDER BY MIN(createdAt) ASC 
         `;
         const [rows] = await execute(query);
         return rows;
@@ -45,7 +45,7 @@ export default class AdminModel{
             JOIN product p ON id.productId = p.id
             JOIN category c ON p.categoryId = c.id
             WHERE i.status IN ('Paid', 'Completed') 
-            GROUP BY c.id
+            GROUP BY c.id, c.categoryName
             ORDER BY rentalCount DESC
             LIMIT 5;
         `;
@@ -96,7 +96,24 @@ export default class AdminModel{
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
         
-        query += ` GROUP BY r.id ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
+       query += ` 
+            GROUP BY 
+                r.id, 
+                r.startDate, 
+                r.endDate, 
+                r.status, 
+                u_renter.name, 
+                u_renter.phoneNumber, 
+                u_owner.name, 
+                u_owner.phoneNumber,
+                r.rentalFee,
+                r.shippingFee,
+                i.penaltyFee,
+                r.depositFee,
+                r.createdAt
+            ORDER BY r.createdAt DESC 
+            LIMIT ? OFFSET ?
+        `;
         params.push(Number(limit), Number(offset));
         
         const [rows] = await execute(query, params);

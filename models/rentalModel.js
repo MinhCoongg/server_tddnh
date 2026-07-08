@@ -48,279 +48,279 @@ export class RentalModel {
     }
 
 
-    static async approveRentalRequest(rentalRequestId, rejectedItems = []) {
-    const connection = await beginTransaction();
+        static async approveRentalRequest(rentalRequestId, rejectedItems = []) {
+        const connection = await beginTransaction();
 
-    try {
-        const [rentalRows] = await connection.execute(
-            `
-            SELECT
+        try {
+            const [rentalRows] = await connection.execute(
+                `
+                SELECT
+                    renterId,
+                    shippingFee,
+                    startDate,
+                    endDate
+                FROM rentalrequest
+                WHERE id = ?
+                AND status = 'Pending'
+                `,
+                [rentalRequestId]
+            );
+
+            if (rentalRows.length === 0) {
+                throw new Error("Đơn hàng không tồn tại hoặc đã được xử lý!");
+            }
+
+            const {
                 renterId,
                 shippingFee,
                 startDate,
                 endDate
-            FROM rentalrequest
-            WHERE id = ?
-            AND status = 'Pending'
-            `,
-            [rentalRequestId]
-        );
+            } = rentalRows[0];
 
-        if (rentalRows.length === 0) {
-            throw new Error("Đơn hàng không tồn tại hoặc đã được xử lý!");
-        }
+            const start = new Date(startDate);
+            const end = new Date(endDate);
 
-        const {
-            renterId,
-            shippingFee,
-            startDate,
-            endDate
-        } = rentalRows[0];
-
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-
-        const rentalDays = Math.ceil(
-            Math.abs(end - start) / (1000 * 60 * 60 * 24)
-        );
+            const rentalDays = Math.ceil(
+                Math.abs(end - start) / (1000 * 60 * 60 * 24)
+            );
 
 
-        const [walletRows] = await connection.execute(
-            `SELECT id,balance
-             FROM wallet
-             WHERE userId=?
-             FOR UPDATE`,
-            [renterId]
-        );
+            const [walletRows] = await connection.execute(
+                `SELECT id,balance
+                FROM wallet
+                WHERE userId=?
+                FOR UPDATE`,
+                [renterId]
+            );
 
-        if (walletRows.length === 0) {
-            throw new Error("Không tìm thấy ví khách!");
-        }
+            if (walletRows.length === 0) {
+                throw new Error("Không tìm thấy ví khách!");
+            }
 
 
-        for (const item of rejectedItems) {
+            for (const item of rejectedItems) {
+                await connection.execute(
+                    `
+                    UPDATE rentalrequestdetail
+                    SET status='Cancelled',
+                        cancelReason=?
+                    WHERE rentalRequestId=?
+                    AND productId=?
+                    `,
+                    [
+                        item.reason,
+                        rentalRequestId,
+                        item.productId
+                    ]
+                );
+            }
+
             await connection.execute(
                 `
                 UPDATE rentalrequestdetail
-                SET status='Cancelled',
-                    cancelReason=?
+                SET status='Approved'
                 WHERE rentalRequestId=?
-                AND productId=?
+                AND status<>'Cancelled'
+                `,
+                [rentalRequestId]
+            );
+
+
+            const [approvedItems] = await connection.execute(
+                `
+                SELECT
+                    rd.productId,
+                    rd.quantity,
+                    p.depositAmount,
+                    pt.pricePerDay
+                FROM rentalrequestdetail rd
+                JOIN product p
+                    ON rd.productId=p.id
+                JOIN producttierpricing pt
+                    ON pt.productId=rd.productId
+                WHERE rd.rentalRequestId=?
+                AND rd.status='Approved'
+                AND pt.minDays=(
+                    SELECT MAX(minDays)
+                    FROM producttierpricing
+                    WHERE productId=rd.productId
+                    AND minDays<=?
+                )
                 `,
                 [
-                    item.reason,
                     rentalRequestId,
-                    item.productId
+                    rentalDays
                 ]
             );
-        }
-
-        await connection.execute(
-            `
-            UPDATE rentalrequestdetail
-            SET status='Approved'
-            WHERE rentalRequestId=?
-            AND status<>'Cancelled'
-            `,
-            [rentalRequestId]
-        );
-
-
-        const [approvedItems] = await connection.execute(
-            `
-            SELECT
-                rd.productId,
-                rd.quantity,
-                p.depositAmount,
-                pt.pricePerDay
-            FROM rentalrequestdetail rd
-            JOIN product p
-                ON rd.productId=p.id
-            JOIN producttierpricing pt
-                ON pt.productId=rd.productId
-            WHERE rd.rentalRequestId=?
-            AND rd.status='Approved'
-            AND pt.minDays=(
-                SELECT MAX(minDays)
-                FROM producttierpricing
-                WHERE productId=rd.productId
-                AND minDays<=?
-            )
-            `,
-            [
-                rentalRequestId,
-                rentalDays
-            ]
-        );
 
 
 
-        let newRentalFee = 0;
-        let newDepositFee = 0;
+            let newRentalFee = 0;
+            let newDepositFee = 0;
 
-        for (const item of approvedItems) {
+            for (const item of approvedItems) {
 
-            newRentalFee +=
-                Number(item.pricePerDay) *
-                item.quantity *
-                rentalDays;
+                newRentalFee +=
+                    Number(item.pricePerDay) *
+                    item.quantity *
+                    rentalDays;
 
-            newDepositFee +=
-                Number(item.depositAmount) *
-                item.quantity;
-        }
+                newDepositFee +=
+                    Number(item.depositAmount) *
+                    item.quantity;
+            }
 
-        const newTotalAmount =
-            newRentalFee +
-            Number(shippingFee);
-
-
-        if (Number(walletRows[0].balance) < newDepositFee) {
-            throw new Error("Số dư ví không đủ để thanh toán tiền cọc!");
-        }
-
-        await connection.execute(
-            `
-            UPDATE rentalrequest
-            SET
-                status='Approved',
-                rentalFee=?,
-                depositFee=?,
-                totalAmount=?,
-                approvedAt=NOW()
-            WHERE id=?
-            `,
-            [
-                newRentalFee,
-                newDepositFee,
-                newTotalAmount,
-                rentalRequestId
-            ]
-        );
-
-        await connection.execute(
-            `
-            UPDATE wallet
-            SET balance=balance-?
-            WHERE id=?
-            `,
-            [
-                newDepositFee,
-                walletRows[0].id
-            ]
-        );
-
-        await connection.execute(
-            `
-            UPDATE wallet
-            SET balance=balance+?
-            WHERE id=6
-            `,
-            [newDepositFee]
-        );
+            const newTotalAmount =
+                newRentalFee +
+                Number(shippingFee);
 
 
-        const [invoiceResult] = await connection.execute(
-            `
-            INSERT INTO invoice
-            (
-                rentalId,
-                startDateSnapshot,
-                endDateSnapshot,
-                rentalFee,
-                depositFee,
-                shippingFee,
-                totalAmount,
-                status
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                'Paid'
-            )
-            `,
-            [
-                rentalRequestId,
-                startDate,
-                endDate,
-                newRentalFee,
-                newDepositFee,
-                shippingFee,
-                newTotalAmount
-            ]
-        );
-        const [approvedItemsToCopy] = await connection.execute(
-            `SELECT rd.productId, rd.quantity, p.depositAmount, pt.pricePerDay
-            FROM rentalrequestdetail rd
-            JOIN product p ON rd.productId = p.id
-            JOIN producttierpricing pt ON pt.productId = rd.productId
-            WHERE rd.rentalRequestId = ? AND rd.status = 'Approved'
-            AND pt.minDays = (SELECT MAX(minDays) FROM producttierpricing WHERE productId = rd.productId AND minDays <= ?)`,
-            [rentalRequestId, rentalDays]
-        );
+            if (Number(walletRows[0].balance) < newDepositFee) {
+                throw new Error("Số dư ví không đủ để thanh toán tiền cọc!");
+            }
 
-        for (const item of approvedItemsToCopy) {
             await connection.execute(
-                `INSERT INTO invoicedetail (invoiceId, productId, quantity, rentalFeeSnapshot, depositFeeSnapshot)
-                VALUES (?, ?, ?, ?, ?)`,
+                `
+                UPDATE rentalrequest
+                SET
+                    status='Approved',
+                    rentalFee=?,
+                    depositFee=?,
+                    totalAmount=?,
+                    approvedAt=NOW()
+                WHERE id=?
+                `,
                 [
-                    invoiceResult.insertId, 
-                    item.productId,
-                    item.quantity,
-                    Number(item.pricePerDay) * rentalDays,
-                    Number(item.depositAmount)
+                    newRentalFee,
+                    newDepositFee,
+                    newTotalAmount,
+                    rentalRequestId
                 ]
             );
+
+            await connection.execute(
+                `
+                UPDATE wallet
+                SET balance=balance-?
+                WHERE id=?
+                `,
+                [
+                    newDepositFee,
+                    walletRows[0].id
+                ]
+            );
+
+            await connection.execute(
+                `
+                UPDATE wallet
+                SET balance=balance+?
+                WHERE id=6
+                `,
+                [newDepositFee]
+            );
+
+
+            const [invoiceResult] = await connection.execute(
+                `
+                INSERT INTO invoice
+                (
+                    rentalId,
+                    startDateSnapshot,
+                    endDateSnapshot,
+                    rentalFee,
+                    depositFee,
+                    shippingFee,
+                    totalAmount,
+                    status
+                )
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    'Paid'
+                )
+                `,
+                [
+                    rentalRequestId,
+                    startDate,
+                    endDate,
+                    newRentalFee,
+                    newDepositFee,
+                    shippingFee,
+                    newTotalAmount
+                ]
+            );
+            const [approvedItemsToCopy] = await connection.execute(
+                `SELECT rd.productId, rd.quantity, p.depositAmount, pt.pricePerDay
+                FROM rentalrequestdetail rd
+                JOIN product p ON rd.productId = p.id
+                JOIN producttierpricing pt ON pt.productId = rd.productId
+                WHERE rd.rentalRequestId = ? AND rd.status = 'Approved'
+                AND pt.minDays = (SELECT MAX(minDays) FROM producttierpricing WHERE productId = rd.productId AND minDays <= ?)`,
+                [rentalRequestId, rentalDays]
+            );
+
+            for (const item of approvedItemsToCopy) {
+                await connection.execute(
+                    `INSERT INTO invoicedetail (invoiceId, productId, quantity, rentalFeeSnapshot, depositFeeSnapshot)
+                    VALUES (?, ?, ?, ?, ?)`,
+                    [
+                        invoiceResult.insertId, 
+                        item.productId,
+                        item.quantity,
+                        Number(item.pricePerDay) * rentalDays,
+                        Number(item.depositAmount)
+                    ]
+                );
+            }
+        
+
+            await connection.execute(
+                `
+                INSERT INTO wallettransaction
+                (
+                    walletId,
+                    rentalRequestId,
+                    invoiceId,
+                    transactionType,
+                    amount,
+                    status
+                )
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    'Deposit',
+                    ?,
+                    'Completed'
+                )
+                `,
+                [
+                    walletRows[0].id,
+                    rentalRequestId,
+                    invoiceResult.insertId,
+                    newDepositFee
+                ]
+            );
+
+            await commitTransaction(connection);
+
+            return {
+                success: true,
+                message: "Duyệt đơn và thu tiền cọc thành công!"
+            };
+
+        } catch (error) {
+            await rollbackTransaction(connection);
+            throw error;
         }
-      
-
-        await connection.execute(
-            `
-            INSERT INTO wallettransaction
-            (
-                walletId,
-                rentalRequestId,
-                invoiceId,
-                transactionType,
-                amount,
-                status
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                'TransferToAdmin',
-                ?,
-                'Completed'
-            )
-            `,
-            [
-                walletRows[0].id,
-                rentalRequestId,
-                invoiceResult.insertId,
-                newDepositFee
-            ]
-        );
-
-        await commitTransaction(connection);
-
-        return {
-            success: true,
-            message: "Duyệt đơn và thu tiền cọc thành công!"
-        };
-
-    } catch (error) {
-        await rollbackTransaction(connection);
-        throw error;
     }
-}
    
    static async completeRentalOrder(
     rentalRequestId,

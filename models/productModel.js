@@ -6,15 +6,17 @@ export default class productModel {
     try {
         const baseQuery = `
             SELECT 
-                p.id, p.ownerId, p.categoryId, p.addressId, p.title, 
-                p.depositAmount, 
-                 (
-                    SELECT MIN(pricePerDay)
-                    FROM producttierpricing ptp
-                    WHERE ptp.productId = p.id
-                ) AS minPrice,
-                p.quantity, p.status, p.createdAt,
-                sa.fullAddress as location,
+                p.id, 
+                ANY_VALUE(p.ownerId) as ownerId, 
+                ANY_VALUE(p.categoryId) as categoryId, 
+                ANY_VALUE(p.addressId) as addressId, 
+                ANY_VALUE(p.title) as title, 
+                ANY_VALUE(p.depositAmount) as depositAmount, 
+                (SELECT MIN(pricePerDay) FROM producttierpricing ptp WHERE ptp.productId = p.id) AS minPrice,
+                ANY_VALUE(p.quantity) as quantity, 
+                ANY_VALUE(p.status) as status, 
+                ANY_VALUE(p.createdAt) as createdAt,
+                ANY_VALUE(sa.fullAddress) as location,
                 (SELECT imageUrl FROM productimage WHERE productId = p.id LIMIT 1) as thumbnail,
                 COALESCE(ROUND(AVG(r.rating), 1), 5.0) as rating, 
                 COUNT(r.id) as reviewCount 
@@ -55,7 +57,7 @@ export default class productModel {
             JOIN product p ON u.id = p.ownerId
             LEFT JOIN review r ON p.id = r.productId
             WHERE p.status = 'Available'
-            GROUP BY u.id
+            GROUP BY u.id, u.name, u.avatar
             HAVING shopRating >= 4.5 
             ORDER BY totalReviews DESC, shopRating DESC
             LIMIT 10
@@ -366,21 +368,21 @@ export default class productModel {
         let query = `
             SELECT
                 p.id,
-                p.ownerId,
-                p.categoryId,
-                p.addressId,
-                p.title,
-                p.description,
-                p.depositAmount,
-                p.quantity,
-                p.status,
-                p.createdAt,
+                ANY_VALUE(p.ownerId) as ownerId,
+                ANY_VALUE(p.categoryId) as categoryId,
+                ANY_VALUE(p.addressId) as addressId,
+                ANY_VALUE(p.title) as title,
+                ANY_VALUE(p.description) as description,
+                ANY_VALUE(p.depositAmount) as depositAmount,
+                ANY_VALUE(p.quantity) as quantity,
+                ANY_VALUE(p.status) as status,
+                ANY_VALUE(p.createdAt) as createdAt,
 
                 price.minPrice,
 
                 img.thumbnail,
 
-                sa.fullAddress AS location,
+                ANY_VALUE(sa.fullAddress) AS location,
 
                 COALESCE(ROUND(AVG(r.rating),1),5.0) AS rating,
                 COUNT(DISTINCT r.id) AS reviewCount

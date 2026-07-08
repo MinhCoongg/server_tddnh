@@ -39,7 +39,7 @@ export default class WishListModel{
         LEFT JOIN shippingaddress sa ON p.addressId = sa.id
         LEFT JOIN review r ON p.id = r.productId
         WHERE w.userId = ?
-        GROUP BY p.id
+        GROUP BY p.id, p.title, sa.fullAddress, w.id
         ORDER BY w.id DESC
         `, [userId]);
         return rows.map(row => ({
