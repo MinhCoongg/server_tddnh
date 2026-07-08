@@ -1,4 +1,4 @@
-import AddressModel from '../models/AddressModel.js'; 
+import AddressModel from '../models/addressModel.js'; 
 
 export default class AddressController {
 
