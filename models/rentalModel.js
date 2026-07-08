@@ -519,7 +519,7 @@ export class RentalModel {
                 (SELECT id FROM wallet WHERE userId=?),
                 ?,
                 ?,
-                'Income',
+                'Payout',
                 ?,
                 'Success'
             );
