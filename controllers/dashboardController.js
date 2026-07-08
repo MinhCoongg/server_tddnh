@@ -29,9 +29,11 @@ export default class AdminController{
 
     static async getAllOrders(req, res) {
         try {
-            const { status, search, page, limit } = req.query;
+            const { status, search} = req.query;
+            const page = parseInt(req.query.page, 10) || 1;
+            const limit = parseInt(req.query.limit, 10) || 5;
             const [orders, stats] = await Promise.all([
-                AdminModel.getAllSystemOrders(status, search, parseInt(page) || 1, parseInt(limit) || 5),
+                AdminModel.getAllSystemOrders(status, search, page, limit),
                 AdminModel.getRentalStats()
             ]);
 
@@ -41,8 +43,8 @@ export default class AdminController{
                 stats: stats 
             });
         } catch (error) {
-            console.error("Lỗi tại AdminRentalController:", error.message);
-            return res.status(500).json({ success: false, message: "Lỗi hệ thống!" });
+            console.error("LỖI THẬT SỰ TẠI AdminRentalController:", error);
+            return res.status(500).json({ success: false, message: error.message });
         }
     }
 
