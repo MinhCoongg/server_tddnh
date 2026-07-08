@@ -574,6 +574,7 @@ export class RentalModel {
         let query = `
             SELECT 
                 r.id,
+                r.createdAt,
                 CONCAT('#RS', r.id) as orderCode,
                 DATE_FORMAT(r.createdAt, '%d/%m/%Y %H:%i') as orderDate,
                 DATE_FORMAT(r.startDate, '%d/%m/%Y') as startDate,
@@ -840,6 +841,7 @@ export class RentalModel {
         let query = `
             SELECT DISTINCT
                 r.id,
+                r.createdAt,
                 CONCAT('#RS', r.id) as orderCode,
                 DATE_FORMAT(r.createdAt, '%d/%m/%Y %H:%i') as orderDate,
                 DATE_FORMAT(r.startDate, '%d/%m/%Y') as startDateFormatted,
