@@ -55,41 +55,69 @@ export default class AdminModel{
 
 
     static async getAllSystemOrders(status, search, page = 1, limit = 5) {
-        const l = parseInt(limit, 10) || 5;
-        const o = (parseInt(page, 10) - 1) * l;
+        const offset = (page - 1) * limit;
         let query = `
-            SELECT DISTINCT r.id, r.createdAt, CONCAT('#RS', r.id) as orderCode,
-            r.startDate, r.endDate, r.status,
-            u_renter.name as renterName, u_renter.phoneNumber as renterPhone,
-            u_owner.name as ownerName, u_owner.phoneNumber as ownerPhone,
-            (IFNULL(r.rentalFee, 0) + IFNULL(r.shippingFee, 0) + IFNULL(i.penaltyFee, 0)) as netIncome,
-            r.depositFee, p.title as productName, pi.imageUrl as productImage
+            SELECT 
+                r.id, 
+                CONCAT('#RS', r.id) as orderCode,
+                r.startDate, r.endDate, 
+                r.status,
+                u_renter.name as renterName, u_renter.phoneNumber as renterPhone,
+                u_owner.name as ownerName, u_owner.phoneNumber as ownerPhone,
+                (IFNULL(r.rentalFee, 0) + IFNULL(r.shippingFee, 0) + IFNULL(i.penaltyFee, 0)) as netIncome,
+                r.depositFee,
+                (SELECT p.title FROM product p 
+                JOIN rentalrequestdetail rd ON p.id = rd.productId 
+                WHERE rd.rentalRequestId = r.id LIMIT 1) as productName,
+                (SELECT pi.imageUrl FROM productimage pi 
+                JOIN rentalrequestdetail rd ON pi.productId = rd.productId 
+                WHERE rd.rentalRequestId = r.id LIMIT 1) as productImage
             FROM rentalrequest r
             JOIN user u_renter ON r.renterId = u_renter.id
             LEFT JOIN invoice i ON r.id = i.rentalId
             JOIN rentalrequestdetail rd ON r.id = rd.rentalRequestId
             JOIN product p ON rd.productId = p.id
-            LEFT JOIN productimage pi ON pi.productId = p.id
             JOIN user u_owner ON p.ownerId = u_owner.id
             WHERE 1=1
         `;
         
         const params = [];
-
-        if (status && status.trim() !== '' && status !== 'All') {
-            query += ` AND r.status = ?`;
+        if (status && status !== 'All') {
+            query += ` AND r.status = ?`; 
             params.push(status);
         }
 
         if (search && search.trim() !== '') {
-            query += ` AND (r.id LIKE ? OR u_renter.name LIKE ? OR p.title LIKE ?)`;
+            query += ` AND (r.id LIKE ? OR u_renter.name LIKE ? OR EXISTS (
+                SELECT 1 FROM rentalrequestdetail rd 
+                JOIN product p ON rd.productId = p.id 
+                WHERE rd.rentalRequestId = r.id AND p.title LIKE ?
+            ))`;
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
         
-        query += ` ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
-        params.push(Number(l), Number(o));
+       query += ` 
+            GROUP BY 
+                r.id, 
+                r.startDate, 
+                r.endDate, 
+                r.status, 
+                u_renter.name, 
+                u_renter.phoneNumber, 
+                u_owner.name, 
+                u_owner.phoneNumber,
+                r.rentalFee,
+                r.shippingFee,
+                i.penaltyFee,
+                r.depositFee,
+                r.createdAt
+            ORDER BY r.createdAt DESC 
+            LIMIT ? OFFSET ?
+        `;
+        const l = parseInt(limit, 10);
+        const o = parseInt(offset, 10);
+        params.push(l, o);
         
-        console.log("SQL:", query, "Params:", params);
         const [rows] = await execute(query, params);
         return rows;
     }

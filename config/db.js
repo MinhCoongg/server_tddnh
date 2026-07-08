@@ -13,7 +13,7 @@ const pool = createPool({
 });
 export async function execute(query, params) {
     try {
-        return await pool.execute(query, params);
+        return await pool.query(query, params);
     } catch (error) {
         console.error("Lỗi Database Connection:", error.message);
         throw error; 
