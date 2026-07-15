@@ -9,18 +9,25 @@ export class RentalModel {
         const connection = await beginTransaction();
         try {
             for (const item of items) {
+                const startISO = new Date(startDate).toISOString().split('T')[0];
+                const endISO = new Date(endDate).toISOString().split('T')[0];
                 const checkOverlapQuery = `
                     SELECT r.id FROM rentalrequest r
                     JOIN rentalrequestdetail rd ON r.id = rd.rentalRequestId
-                    WHERE rd.productId = ? AND r.status IN ('Approved', 'Shipping', 'Delivered')
-                    AND (? <= r.endDate AND ? >= r.startDate);
+                    WHERE rd.productId = ? 
+                    AND r.status IN ('Approved', 'Shipping', 'Delivered')
+                    AND (r.startDate <= ? AND r.endDate >= ?);
                 `;
-                const [overlapRows] = await connection.execute(checkOverlapQuery, [item.productId, endDate, startDate]);
+                const [overlapRows] = await connection.execute(checkOverlapQuery, [
+                    item.productId, 
+                    endISO, 
+                    startISO
+                ]);
+
                 if (overlapRows && overlapRows.length > 0) {
-                    throw new Error(`Sản phẩm (ID: ${item.productId}) đã bị trùng lịch đặt thuê!`);
+                    throw new Error(`Sản phẩm (ID: ${item.productId}) đã bị trùng lịch, không thể đặt thêm!`);
                 }
             }
-
             const rentalQuery = `
                 INSERT INTO rentalrequest (renterId, startDate, endDate, status, shippingMethod, receiverName, receiverPhone, fullAddress, rentalFee, depositFee, shippingFee, totalAmount)
                 VALUES (?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?);
