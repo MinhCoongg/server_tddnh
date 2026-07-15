@@ -7,7 +7,6 @@ export class RentalModel {
         shippingFee, rentalFee, depositFee, totalAmount, items
     }) {
         const connection = await beginTransaction();
-
         try {
             for (const item of items) {
                 const checkOverlapQuery = `
@@ -21,7 +20,6 @@ export class RentalModel {
                     throw new Error(`Sản phẩm (ID: ${item.productId}) đã bị trùng lịch đặt thuê!`);
                 }
             }
-
 
             const rentalQuery = `
                 INSERT INTO rentalrequest (renterId, startDate, endDate, status, shippingMethod, receiverName, receiverPhone, fullAddress, rentalFee, depositFee, shippingFee, totalAmount)

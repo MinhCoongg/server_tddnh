@@ -11,6 +11,7 @@ const pool = createPool({
     enableKeepAlive: true, 
     keepAliveInitialDelay: 10000
 });
+
 export async function execute(query, params) {
     try {
         return await pool.query(query, params);
